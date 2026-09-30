@@ -1,0 +1,52 @@
+name: Build BT3 Effect Studio
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Extraer el icono incrustado en el .py (sin ejecutar el programa)
+        shell: python
+        run: |
+          import ast, base64
+          src = open("bt3_effect_studio.py", encoding="utf-8").read()
+          for node in ast.parse(src).body:
+              if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "ICON_ICO_B64":
+                  open("ICONO.ico", "wb").write(base64.b64decode(node.value.value))
+                  print("ICONO.ico generado")
+                  break
+          else:
+              raise SystemExit("No se encontro ICON_ICO_B64")
+
+      - name: Compilar
+        run: >
+          pyinstaller --onefile --windowed --clean
+          --name BT3_Effect_Studio
+          --icon ICONO.ico
+          bt3_effect_studio.py
+
+      - name: Subir ejecutable
+        uses: actions/upload-artifact@v4
+        with:
+          name: BT3_Effect_Studio-windows
+          path: dist/BT3_Effect_Studio.exe
+
+      - name: Publicar en Releases (solo con tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/BT3_Effect_Studio.exe
